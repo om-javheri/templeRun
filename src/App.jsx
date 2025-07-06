@@ -23,11 +23,9 @@ export default function App() {
   const [playerImg, setPlayerImg] = useState(null)
   const [obImgs, setObImgs] = useState([])
   const [speed, setSpeed] = useState(1)
-
   const [shields, setShields] = useState(0)
   const [doubleScore, setDoubleScore] = useState(false)
   const [slowMotion, setSlowMotion] = useState(false)
-
   const [lanes, setLanes] = useState([])
 
   useEffect(() => {
@@ -55,7 +53,12 @@ export default function App() {
 
   const move = dir => {
     if (!started || over) return
-    const currentIndex = lanes.indexOf(left)
+    let currentIndex = lanes.findIndex(l => Math.abs(l - left) < 5)
+    if (currentIndex === -1) {
+      currentIndex = lanes.reduce((prev, curr, idx) =>
+        Math.abs(curr - left) < Math.abs(lanes[prev] - left) ? idx : prev, 0)
+    }
+
     if (dir === 'left' && currentIndex > 0) setLeft(lanes[currentIndex - 1])
     else if (dir === 'right' && currentIndex < lanes.length - 1) setLeft(lanes[currentIndex + 1])
     else if (dir === 'up' && !jumping) jump()
@@ -250,6 +253,24 @@ export default function App() {
     }
   }, [jumping, started, over])
 
+  useEffect(() => {
+    const area = document.getElementById('game-area')
+    const st = e => { const t = e.touches[0]; touchRef.current = { x: t.clientX, y: t.clientY } }
+    const en = e => {
+      const t = e.changedTouches[0]
+      const dx = t.clientX - touchRef.current.x, dy = t.clientY - touchRef.current.y
+      if (!started || over) return
+      if (Math.abs(dx) > Math.abs(dy)) move(dx > 30 ? 'right' : dx < -30 ? 'left' : '')
+      else if (dy < -30 && !jumping) jump()
+    }
+    area.addEventListener('touchstart', st)
+    area.addEventListener('touchend', en)
+    return () => {
+      area.removeEventListener('touchstart', st)
+      area.removeEventListener('touchend', en)
+    }
+  }, [jumping, started, over])
+
   const playerSrc = plays > 1 && playerImg ? playerImg : viteLogo
 
   const renderObstacle = o => o.img ? (
@@ -273,7 +294,7 @@ export default function App() {
   )
 
   return (
-    <div className="w-full h-screen flex flex-col md:flex-row bg-black text-white overflow-hidden">
+    <div className="w-full h-screen bg-black text-white overflow-hidden">
   {/* Game Area */}
   <div id="game-area" className="relative flex-1 flex justify-center items-center pb-20 overflow-hidden z-20 h-screen">
     <div ref={gameContainerRef} className="relative h-full" style={{ width: `${laneWidth * (lanes.length || 5)}px` }}>
@@ -353,7 +374,7 @@ export default function App() {
   </div>
 
   {/* Settings Panel */}
- {!started && <div className="fixed bottom-0 md:right-0 z-30 w-full md:w-[350px] bg-transparent p-6 md:p-4 flex flex-col gap-6 md:gap-4 overflow-y-auto max-h-[90dvh] md:max-h-none text-sm md:text-base ">
+ {(!started || over) && <div className="fixed bottom-0 md:right-0 z-30 w-full md:w-[350px] bg-transparent p-6 md:p-4 flex flex-col gap-6 md:gap-4 overflow-y-auto max-h-[90dvh] md:max-h-none text-sm md:text-base ">
     <h2 className="text-lg font-semibold">Settings</h2>
     {plays > 0 && (
       <>
