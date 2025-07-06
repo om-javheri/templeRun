@@ -13,6 +13,8 @@ function App() {
   const [gameOver, setGameOver] = useState(false)
   const [gameStarted, setGameStarted] = useState(false)
   const [playCount, setPlayCount] = useState(0)
+  const [score, setScore] = useState(0)
+  const [highScore, setHighScore] = useState(() => Number(localStorage.getItem('highScore') || 0))
 
   const [customPlayerImg, setCustomPlayerImg] = useState(null)
   const [obstacleImages, setObstacleImages] = useState([])
@@ -44,6 +46,7 @@ function App() {
     setPlayerY(0)
     setJumping(false)
     setLeftOffset(200)
+    setScore(0)
     setPlayCount((prev) => prev + 1)
   }
 
@@ -84,7 +87,6 @@ function App() {
     })
   }
 
-  // Load from localStorage
   useEffect(() => {
     const savedPlayer = localStorage.getItem('customPlayerImg')
     const savedObstacles = JSON.parse(localStorage.getItem('obstacleImages') || '[]')
@@ -92,7 +94,6 @@ function App() {
     if (savedObstacles?.length) setObstacleImages(savedObstacles)
   }, [])
 
-  // Spawn obstacles
   useEffect(() => {
     if (!gameStarted || gameOver) return
     const spawn = setInterval(() => {
@@ -116,21 +117,25 @@ function App() {
     return () => clearInterval(spawn)
   }, [gameStarted, gameOver, obstacleImages])
 
-  // Move obstacles
   useEffect(() => {
     if (!gameStarted || gameOver) return
     const move = setInterval(() => {
       setObstacles((prev) =>
         prev
           .map((obs) => ({ ...obs, top: obs.top + 10 }))
-          .filter((obs) => obs.top < 600)
+          .filter((obs) => {
+            const isVisible = obs.top < 600
+            if (!isVisible) {
+              setScore((s) => s + 1)
+            }
+            return isVisible
+          })
       )
     }, 100)
 
     return () => clearInterval(move)
   }, [gameStarted, gameOver])
 
-  // Collision detection
   useEffect(() => {
     if (!gameStarted || gameOver) return
     const playerTop = playerBaseTop + playerY
@@ -143,19 +148,23 @@ function App() {
       const xCollision = obs.left < playerRight && obsRight > leftOffset
       const yCollision = obsBottom > playerTop && obs.top < playerBottom
       if (xCollision && yCollision) {
-        if (obs.height === 30 && !jumping) setGameOver(true)
-        else if (obs.height === 50) setGameOver(true)
+        if ((obs.height === 30 && !jumping) || obs.height === 50) {
+          setGameOver(true)
+          setHighScore((prevHigh) => {
+            const newHigh = Math.max(score, prevHigh)
+            localStorage.setItem('highScore', newHigh)
+            return newHigh
+          })
+        }
       }
     })
-  }, [obstacles, leftOffset, jumping, gameStarted, gameOver])
+  }, [obstacles, leftOffset, jumping, gameStarted, gameOver, score])
 
-  // Keyboard listener
   useEffect(() => {
     document.addEventListener('keydown', handleMove)
     return () => document.removeEventListener('keydown', handleMove)
   }, [leftOffset, jumping, gameStarted, gameOver])
 
-  // Swipe gesture handling for mobile
   useEffect(() => {
     const handleTouchStart = (e) => {
       const touch = e.touches[0]
@@ -173,11 +182,9 @@ function App() {
       if (!gameStarted || gameOver) return
 
       if (absX > absY) {
-        // Horizontal swipe
         if (deltaX > 30) setLeftOffset((prev) => Math.min(400, prev + laneWidth))
         else if (deltaX < -30) setLeftOffset((prev) => Math.max(0, prev - laneWidth))
       } else {
-        // Vertical swipe
         if (deltaY < -30 && !jumping) {
           setJumping(true)
           setPlayerY(-jumpHeight)
@@ -201,8 +208,18 @@ function App() {
 
   return (
     <div className="min-h-screen w-full bg-black flex flex-col md:flex-row">
-      {/* Game Area */}
       <div id="game-area" className="relative w-screen md:flex-1 bg-black overflow-hidden" style={{ height: '600px' }}>
+        {gameStarted && !gameOver && (
+          <div className="absolute top-2 left-2 text-white text-lg bg-black/60 px-3 py-1 rounded">
+            Score: {score}
+          </div>
+        )}
+        {highScore > 0 && (
+          <div className="absolute top-2 right-2 text-yellow-300 text-lg bg-black/60 px-3 py-1 rounded">
+            High Score: {highScore}
+          </div>
+        )}
+
         {gameStarted &&
           obstacles.map((obs) =>
             obs.img ? (
@@ -270,6 +287,8 @@ function App() {
         {gameOver && (
           <div className="absolute inset-0 flex flex-col items-center justify-center text-white text-4xl font-bold gap-4 bg-black/80">
             <div>Game Over</div>
+            <div className="text-2xl">Score: {score}</div>
+            <div className="text-xl text-yellow-400">High Score: {highScore}</div>
             <button
               onClick={startGame}
               className="bg-white text-black px-6 py-2 rounded text-2xl hover:bg-gray-300"
